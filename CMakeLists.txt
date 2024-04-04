@@ -1,49 +1,51 @@
 
-set ( PACKET_IO_INCLUDES
-    active.h
-    sfdaq.h
-    sfdaq_instance.h
+set ( FILE_LIST
+    base_tracker.cc
+    base_tracker.h
+    csv_formatter.cc
+    csv_formatter.h
+    cpu_tracker.cc
+    cpu_tracker.h
+    flow_tracker.cc
+    flow_tracker.h
+    flow_ip_tracker.cc
+    flow_ip_tracker.h
+    json_formatter.cc
+    json_formatter.h
+    perf_formatter.cc
+    perf_formatter.h
+    perf_module.cc
+    perf_module.h
+    perf_monitor.cc
+    perf_pegs.h
+    perf_reload_tuner.h
+    perf_tracker.cc
+    perf_tracker.h
+    text_formatter.cc
+    text_formatter.h
 )
 
-if (ENABLE_UNIT_TESTS)
-    set(TEST_FILES
-        test/sfdaq_module_test.cc
+if (STATIC_INSPECTORS)
+    add_library(perf_monitor OBJECT
+        ${FILE_LIST}
     )
-endif (ENABLE_UNIT_TESTS)
 
-if (ENABLE_STATIC_DAQ)
-    foreach (STATIC_MODULE_NAME IN LISTS DAQ_STATIC_MODULES)
-        string(APPEND DAQ_STATIC_MODULE_EXTERNS "extern const DAQ_ModuleAPI_t ${STATIC_MODULE_NAME}_daq_module_data;\n")
-        string(APPEND DAQ_STATIC_MODULE_DATA_ARRAY "    &${STATIC_MODULE_NAME}_daq_module_data,\n")
-    endforeach ()
-    configure_file (
-        "${CMAKE_CURRENT_SOURCE_DIR}/sfdaq_static_modules.h.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/sfdaq_static_modules.h"
-    )
-    set_source_files_properties(sfdaq.cc PROPERTIES COMPILE_DEFINITIONS ENABLE_STATIC_DAQ)
-    include_directories(${CMAKE_CURRENT_BINARY_DIR})
-    set(STATIC_DAQ_MODULES_HEADER "sfdaq_static_modules.h.in")
-endif ()
+else (STATIC_INSPECTORS)
+    add_dynamic_module(perf_monitor inspectors ${FILE_LIST})
 
-add_library (packet_io OBJECT
-    active.cc
-    active.h
-    active_action.h
-    sfdaq.cc
-    sfdaq.h
-    sfdaq_config.cc
-    sfdaq_config.h
-    sfdaq_instance.cc
-    sfdaq_instance.h
-    sfdaq_module.cc
-    sfdaq_module.h
-    trough.cc
-    trough.h
-    ${STATIC_DAQ_MODULES_HEADER}
-    ${TEST_FILES}
+endif (STATIC_INSPECTORS)
+
+add_catch_test( csv_formatter_test
+    NO_TEST_SOURCE
+    SOURCES
+        csv_formatter.cc
+        perf_formatter.cc
 )
 
-install (FILES ${PACKET_IO_INCLUDES}
-    DESTINATION "${INCLUDE_INSTALL_PATH}/packet_io"
+add_catch_test( json_formatter_test
+    NO_TEST_SOURCE
+    SOURCES
+        json_formatter.cc
+        perf_formatter.cc
 )
 
