@@ -1,37 +1,47 @@
-This directory contains the program entry point, thread management, and
-control functions.
+This directory contains the implementation of the Stream preprocessor
+components:
 
-* The main / foreground thread services control inputs from signals, the
-  command line shell (if enabled), etc.
+* Stream constants and data types used across stream components or by
+  clients of the stream API.
 
-* The packet / background threads service one input source apiece.
+* Prototype definitions and implementation for all stream API methods.
 
-The main_loop() starts a new Pig when a new source (interface or pcap,
-etc.) is available if the number of running Pigs is less than configured.
+* Virtual base class defining the Stream Splitter interface.
+  Implementation of stream splitters for accumulated TCP over maximum
+  flushing (atom splitter) and length of given segment flushing (log
+  splitter).
 
-It also does housekeeping functions like servicing signal flags, shell
-commands, etc.
+* Prototype definitions and implementation for the stream Protocol Aware
+  Flushing API methods (PAF is now realized by stream splitter subclasses).
 
-The shell has to be explicitly enabled at build time to be available and
-then must be configured at run time to be activated. Multiple simultaneous
-remote shells are supported.
+Major subcomponents of the Stream inspector are each implemented in a
+subdirectory located here.  These include the following:
 
-Unit test and benchmark testbuild options also impact actual execution.
+* base - implements the Stream class as a subclass of Inspector, handles
+  stream configuration, provides entry point for Stream evaluation of a
+  Packet, stream statistics management.
 
-Reload is implemented by swapping a thread local config pointer by each
-running Pig.  The inspector manager is called to empty trash if the main
-loop is not otherwise busy.
+* tcp - implements module for handling Stream tcp sessions.  This includes
+  normalization protocol tracking, normalization, and reassembly.
 
-Reload policy is implemented by cloning the thread local config and 
-overwriting the policy map and the inspection policy in the main thread. 
-The inspector list from the old config's inspection policy is copied 
-into the inspection policy of the new config. After the config pointer 
-is cloned, the new inspection policy elements (reloadable) such as 
-inspectors, binder, wizard etc are read and instantiated. 
-The inspector list of the new config is updated by swapping out the 
-old inspectors, binder etc. with the newly instantiated elements. The
-reloaded inspectors, binders and other inspection policy elements are 
-marked for deletion. After the new inspection policy is loaded, the 
-thread local config pointer is swapped with the new cloned config 
-by running Pig. This happens in the packet thread. The inspector manager
- is then called to delete any reloaded policy elements and empty trash. 
+* udp - implements module for handling Stream udp sessions.  Tracking only.
+
+* icmp - implements module for handling Stream icmp sessions.  Tracking
+  only.
+
+* ip - implements module for handling Stream ip sessions.  Tracking only.
+
+* file - implements module for handling Stream file session.  This directly
+  sets file data and invokes file processing and detection.
+
+* user - implements module for handling Stream user session.  This handles
+  payload only, eg from a socket.  Does splitter based reassembly like TCP.
+
+HA functionality for each protocol (IP,ICMP,UDP, & TCP) is implemented in
+./<protocol>/<protocol>_ha.*.  The static class <protocol>HAManager instantiates and
+destroys the <protocol>HA class.  <protocol>HA is a subclass of ProtocolHA and interfaces
+with the high level Stream HA functionality. <protocol>HA is instantiated in each packet
+processing thread.
+
+Note that the lifetime of any stream splitter instance should be less than the lifetime
+of the corresponding inspector instance.
