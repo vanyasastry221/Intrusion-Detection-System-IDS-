@@ -1,24 +1,29 @@
-This directory contains the implementation of IP session tracking and
-processing functions.  When the network protocol for a flow is determined
-to be IP the base Stream preprocessor will delegate handling of the packets
-on that flow to this module.
+This directory contains all files related to SSL inspector. The SSL
+inspector inspects stream reassembled SSL and TLS traffic and optionally
+determines if and when to stop inspection of it.
 
-The StreamIp class is implemented as a subclass of Inspector and provides
-functions for loading stream IP configuration and packet evaluation.  The
-packet eval method is not used as the base Stream Inspector delegates
-packets directly to the IP session packet processing method.
+Typically, SSL is used over port 443 as HTTPS.  By enabling the SSL
+inspector to inspect port 443, only the SSL handshake of each connection
+will be inspected.  Once the traffic is determined to be encrypted, no
+further inspection of the data on the connection is made.
 
-The module ip_ha.cc (and ip_ha.h) implements the per-protocol hooks into
-the stream logic for HA.  IpHAManager is a static class that interfaces
-to a per-packet thread instance of the class IpHA.  IpHA is sub-class
-of ProtocolHA, declared in the stream/base area.  Thus each protocol
-within 'stream' can have specific HA logic and interfaces.
+Each stream reassembled packet containing SSL traffic has an unencrypted
+portion that provides some information about the traffic itself, and the
+state of the connection.  SSL inspector uses this information to determine
+whether or not a handshake is occurring or if a handshake previously
+occurred.
 
-IpHAManager::process_deletion() is called when an IP stream is being 
-destroyed and indicates to the stream & flow HA logic that a flow
-deletion HA message needs to be emitted for the flow in question.
-Ip streams are closed due to timeout or pruning actions which lead
-to the invocation of process_deletion().
+By default, SSL inspector looks for a handshake followed by encrypted
+traffic traveling to both sides.  If one side responds with an indication
+that something has failed, such as the handshake, the session is not marked
+as encrypted.  Verifying that faultless encrypted traffic is sent from both
+endpoints ensures two things: the last client-side handshake packet was not
+crafted to evade Snort, and that the traffic is legitimately encrypted.
 
-IpHA::create_session() is called from the stream & flow HA logic and
-handles the creation of new flow upon receiving an HA update message.
+In some cases, especially when packets may be missed, the only observed
+response from one endpoint will be TCP ACKs.  Therefore, if a user knows
+that server-side encrypted data can be trusted to mark the session as
+encrypted, the user should use the 'trustservers' option.
+
+SSL inspector also inspects the heartbeat records and identifies the
+heartbleed evasion.

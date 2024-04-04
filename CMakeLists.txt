@@ -1,13 +1,30 @@
+set (SSL_INCLUDES
+    ssl_flow_data.h
+)
 
-add_library( stream_ip OBJECT
-    ip_defrag.cc
-    ip_defrag.h
-    ip_ha.cc
-    ip_ha.h
-    ip_module.cc
-    ip_module.h
-    ip_session.cc
-    ip_session.h
-    stream_ip.cc
-    stream_ip.h
+set( FILE_LIST
+    ips_ssl_state.cc
+    ips_ssl_version.cc
+    ssl_config.h
+    ssl_inspector.cc
+    ssl_inspector.h
+    ssl_flow_data.cc
+    ssl_module.cc
+    ssl_module.h
+    ssl_splitter.cc
+    ssl_splitter.h
+    ${SSL_INCLUDES}
+)
+
+# can't be be linked dynamically yet
+#if (STATIC_INSPECTORS)
+    add_library( ssl OBJECT ${FILE_LIST})
+
+#else (STATIC_INSPECTORS)
+    #add_dynamic_module(ssl inspectors ${FILE_LIST})
+
+#endif (STATIC_INSPECTORS)
+
+install(FILES ${SSL_INCLUDES}
+    DESTINATION "${INCLUDE_INSTALL_PATH}/service_inspectors/ssl/"
 )
