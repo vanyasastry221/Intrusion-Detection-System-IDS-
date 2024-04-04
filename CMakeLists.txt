@@ -1,30 +1,34 @@
-set (SSL_INCLUDES
-    ssl_flow_data.h
-)
 
 set( FILE_LIST
-    ips_ssl_state.cc
-    ips_ssl_version.cc
-    ssl_config.h
-    ssl_inspector.cc
-    ssl_inspector.h
-    ssl_flow_data.cc
-    ssl_module.cc
-    ssl_module.h
-    ssl_splitter.cc
-    ssl_splitter.h
-    ${SSL_INCLUDES}
+    mms.cc
+    mms.h
+    mms_decode.cc
+    mms_decode.h
+    mms_module.cc
+    mms_module.h
+    mms_splitter.cc
+    mms_splitter.h
+    ips_mms_data.cc
+    ips_mms_func.cc
+    tpkt/tpkt_decode.cc
+    tpkt/tpkt_decode.h
+    tpkt/cotp_decode.cc
+    tpkt/cotp_decode.h
+    tpkt/osi_session_decode.cc
+    tpkt/osi_session_decode.h
+    tpkt/osi_pres_decode.cc
+    tpkt/osi_pres_decode.h
+    tpkt/osi_acse_decode.cc
+    tpkt/osi_acse_decode.h
+    util_tpkt.cc
+    util_tpkt.h
 )
 
-# can't be be linked dynamically yet
-#if (STATIC_INSPECTORS)
-    add_library( ssl OBJECT ${FILE_LIST})
+if (STATIC_INSPECTORS)
+    add_library(mms OBJECT ${FILE_LIST})
 
-#else (STATIC_INSPECTORS)
-    #add_dynamic_module(ssl inspectors ${FILE_LIST})
+else (STATIC_INSPECTORS)
+    add_dynamic_module(mms inspectors ${FILE_LIST})
 
-#endif (STATIC_INSPECTORS)
+endif (STATIC_INSPECTORS)
 
-install(FILES ${SSL_INCLUDES}
-    DESTINATION "${INCLUDE_INSTALL_PATH}/service_inspectors/ssl/"
-)
