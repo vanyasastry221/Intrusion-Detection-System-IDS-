@@ -1,54 +1,49 @@
-set ( PROFILER_INCLUDES
-    memory_defs.h
-    memory_context.h
-    memory_profiler_defs.h
-    profiler.h
-    profiler_defs.h
-    rule_profiler_defs.h
-    time_profiler_defs.h
+
+set ( PACKET_IO_INCLUDES
+    active.h
+    sfdaq.h
+    sfdaq_instance.h
+)
+
+if (ENABLE_UNIT_TESTS)
+    set(TEST_FILES
+        test/sfdaq_module_test.cc
     )
+endif (ENABLE_UNIT_TESTS)
 
-set ( PROFILER_SOURCES
-    active_context.h
-    json_view.cc
-    json_view.h
-    memory_context.cc
-    memory_profiler.cc
-    memory_profiler.h
-    profiler.cc
-    profiler_module.cc
-    profiler_module.h
-    profiler_nodes.cc
-    profiler_nodes.h
-    profiler_printer.h
-    profiler_stats_table.cc
-    profiler_stats_table.h
-    profiler_tree_builder.h
-    rule_profiler.cc
-    rule_profiler.h
-    table_view.cc
-    table_view.h
-    time_profiler.cc
-    time_profiler.h
+if (ENABLE_STATIC_DAQ)
+    foreach (STATIC_MODULE_NAME IN LISTS DAQ_STATIC_MODULES)
+        string(APPEND DAQ_STATIC_MODULE_EXTERNS "extern const DAQ_ModuleAPI_t ${STATIC_MODULE_NAME}_daq_module_data;\n")
+        string(APPEND DAQ_STATIC_MODULE_DATA_ARRAY "    &${STATIC_MODULE_NAME}_daq_module_data,\n")
+    endforeach ()
+    configure_file (
+        "${CMAKE_CURRENT_SOURCE_DIR}/sfdaq_static_modules.h.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/sfdaq_static_modules.h"
     )
+    set_source_files_properties(sfdaq.cc PROPERTIES COMPILE_DEFINITIONS ENABLE_STATIC_DAQ)
+    include_directories(${CMAKE_CURRENT_BINARY_DIR})
+    set(STATIC_DAQ_MODULES_HEADER "sfdaq_static_modules.h.in")
+endif ()
 
-add_library ( profiler OBJECT
-    ${PROFILER_SOURCES}
-    ${PROFILER_INCLUDES}
+add_library (packet_io OBJECT
+    active.cc
+    active.h
+    active_action.h
+    sfdaq.cc
+    sfdaq.h
+    sfdaq_config.cc
+    sfdaq_config.h
+    sfdaq_instance.cc
+    sfdaq_instance.h
+    sfdaq_module.cc
+    sfdaq_module.h
+    trough.cc
+    trough.h
+    ${STATIC_DAQ_MODULES_HEADER}
+    ${TEST_FILES}
 )
 
-install (FILES ${PROFILER_INCLUDES}
-    DESTINATION "${INCLUDE_INSTALL_PATH}/profiler"
+install (FILES ${PACKET_IO_INCLUDES}
+    DESTINATION "${INCLUDE_INSTALL_PATH}/packet_io"
 )
 
-add_catch_test( memory_context_test
-    NO_TEST_SOURCE
-    SOURCES
-        memory_context.cc
-)
-
-add_catch_test( profiler_stats_table_test
-    NO_TEST_SOURCE
-    SOURCES
-        profiler_stats_table.cc
-)

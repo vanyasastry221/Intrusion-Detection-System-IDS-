@@ -1,5 +1,6 @@
 //--------------------------------------------------------------------------
 // Copyright (C) 2014-2024 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2013-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -15,153 +16,179 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //--------------------------------------------------------------------------
-// config_file.cc author Josh Rosenbaum <jrosenba@cisco.com>
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include "config_file.h"
+
+#include <cstring>
 #include <sstream>
-#include <vector>
+#include <string>
 
-#include "conversion_state.h"
-#include "helpers/s2l_util.h"
-#include "data/dt_table_api.h"
+#include "detection/detect.h"
+#include "detection/detection_engine.h"
+#include "log/messages.h"
+#include "main/analyzer.h"
+#include "main/policy.h"
 
-namespace config
-{
-namespace
-{
-class File : public ConversionState
-{
-public:
-    File(Converter& c) : ConversionState(c) { }
-    bool convert(std::istringstream& data_stream) override;
-};
-} // namespace
+using namespace snort;
 
-bool File::convert(std::istringstream& data_stream)
-{
-    std::string args;
-    bool retval = true;
+static std::string lua_conf;
+static std::string snort_conf_dir;
 
-    while (util::get_string(data_stream, args, ","))
+const char* get_snort_conf()
+{ return lua_conf.c_str(); }
+
+const char* get_snort_conf_dir()
+{ return snort_conf_dir.c_str(); }
+
+static int GetChecksumFlags(const char* args)
+{
+    int negative_flags = 0;
+    int positive_flags = 0;
+    int got_positive_flag = 0;
+    int got_negative_flag = 0;
+    int ret_flags = 0;
+
+    if (args == nullptr)
+        return CHECKSUM_FLAG__ALL;
+
+    std::stringstream ss(args);
+    std::string tok;
+
+    while ( ss >> tok )
     {
-        std::istringstream arg_stream(args);
-        std::string keyword = std::string();
-        bool tmpval = true;
-
-        if (!(arg_stream >> keyword))
-            tmpval = false;
-
-        else if (keyword == "file_capture_memcap")
+        if ( tok == "all" )
         {
-            table_api.open_table("file_id");
-            table_api.add_diff_option_comment("config file: file_capture_memcap", "capture_memcap");
-            tmpval = parse_int_option("capture_memcap", arg_stream, false);
-            table_api.close_table();
+            positive_flags = CHECKSUM_FLAG__ALL;
+            negative_flags = 0;
+            got_positive_flag = 1;
         }
-        else if (keyword == "file_capture_max")
+        else if ( tok == "none" )
         {
-            table_api.open_table("file_id");
-            table_api.add_diff_option_comment("config file: file_capture_max", "capture_max_size");
-            tmpval = parse_int_option("capture_max_size", arg_stream, false);
-            table_api.close_table();
+            positive_flags = 0;
+            negative_flags = CHECKSUM_FLAG__ALL;
+            got_negative_flag = 1;
         }
-
-        else if (keyword == "file_capture_min")
+        else if ( tok == "ip" )
         {
-            table_api.open_table("file_id");
-            table_api.add_diff_option_comment("config file: file_capture_min", "capture_min_size");
-            tmpval = parse_int_option("capture_min_size", arg_stream, false);
-            table_api.close_table();
+            positive_flags |= CHECKSUM_FLAG__IP;
+            negative_flags &= ~CHECKSUM_FLAG__IP;
+            got_positive_flag = 1;
         }
-
-        else if (keyword == "file_capture_block_size")
+        else if ( tok == "noip" )
         {
-            table_api.open_table("file_id");
-            table_api.add_diff_option_comment("config file: file_capture_block_size", "capture_block_size");
-            tmpval = parse_int_option("capture_block_size", arg_stream, false);
-            table_api.close_table();
+            positive_flags &= ~CHECKSUM_FLAG__IP;
+            negative_flags |= CHECKSUM_FLAG__IP;
+            got_negative_flag = 1;
         }
-
-        else if (keyword == "show_data_depth")
+        else if ( tok == "tcp" )
         {
-            table_api.open_table("file_id");
-            tmpval = parse_int_option("show_data_depth", arg_stream, false);
-            table_api.close_table();
+            positive_flags |= CHECKSUM_FLAG__TCP;
+            negative_flags &= ~CHECKSUM_FLAG__TCP;
+            got_positive_flag = 1;
         }
-
-        else if (keyword == "type_id")
+        else if ( tok == "notcp" )
         {
-            table_api.open_table("file_policy");
-            table_api.add_diff_option_comment("config file: type_id", "enable_type");
-            table_api.add_option("enable_type", true);
-            table_api.close_table();
+            positive_flags &= ~CHECKSUM_FLAG__TCP;
+            negative_flags |= CHECKSUM_FLAG__TCP;
+            got_negative_flag = 1;
         }
-        else if (keyword == "signature")
+        else if ( tok == "udp" )
         {
-            table_api.open_table("file_policy");
-            table_api.add_diff_option_comment("config file: signature", "enable_signature");
-            table_api.add_option("enable_signature", true);
-            table_api.close_table();
+            positive_flags |= CHECKSUM_FLAG__UDP;
+            negative_flags &= ~CHECKSUM_FLAG__UDP;
+            got_positive_flag = 1;
         }
-        else if (keyword == "file_type_depth")
+        else if ( tok == "noudp" )
         {
-            table_api.open_table("file_id");
-            table_api.add_diff_option_comment("config file: file_type_depth", "type_depth");
-            tmpval = parse_int_option("type_depth", arg_stream, false);
-            table_api.close_table();
+            positive_flags &= ~CHECKSUM_FLAG__UDP;
+            negative_flags |= CHECKSUM_FLAG__UDP;
+            got_negative_flag = 1;
         }
-        else if (keyword == "file_signature_depth")
+        else if ( tok == "icmp" )
         {
-            table_api.open_table("file_id");
-            table_api.add_diff_option_comment("config file: file_signature_depth",
-                "signature_depth");
-            tmpval = parse_int_option("signature_depth", arg_stream, false);
-            table_api.close_table();
+            positive_flags |= CHECKSUM_FLAG__ICMP;
+            negative_flags &= ~CHECKSUM_FLAG__ICMP;
+            got_positive_flag = 1;
         }
-        else if (keyword == "file_block_timeout")
+        else if ( tok == "noicmp" )
         {
-            table_api.open_table("file_id");
-            table_api.add_diff_option_comment("config file: file_block_timeout", "block_timeout");
-            tmpval = parse_int_option("block_timeout", arg_stream, false);
-            table_api.close_table();
-        }
-        else if (keyword == "file_lookup_timeout")
-        {
-            table_api.open_table("file_id");
-            table_api.add_diff_option_comment("config file: file_lookup_timeout",
-                "lookup_timeout");
-            tmpval = parse_int_option("lookup_timeout", arg_stream, false);
-            table_api.close_table();
+            positive_flags &= ~CHECKSUM_FLAG__ICMP;
+            negative_flags |= CHECKSUM_FLAG__ICMP;
+            got_negative_flag = 1;
         }
         else
-            tmpval = false;
-
-        if (retval && !tmpval)
-            retval = false;
+        {
+            ParseError("unknown command line checksum option: %s.", tok.c_str());
+            return ret_flags;
+        }
     }
 
-    // Always add the rules_file option to reference the file magic rules.
-    table_api.open_table("file_id");
-    table_api.add_option("rules_file", "$file_magic");
-    table_api.close_table();
+    /* Invert the negative flags with all checksums */
+    negative_flags ^= CHECKSUM_FLAG__ALL;
+    negative_flags &= CHECKSUM_FLAG__ALL;
 
-    return retval;
+    if (got_positive_flag && got_negative_flag)
+    {
+        /* If we got both positive and negative flags just take the
+         * combination of the two */
+        ret_flags = positive_flags & negative_flags;
+    }
+    else if (got_positive_flag)
+    {
+        /* If we got a positive flag assume the user wants checksums
+         * to be cleared */
+        ret_flags = positive_flags;
+    }
+    else  /* got a negative flag */
+    {
+        /* If we got a negative flag assume the user thinks all
+         * checksums are on */
+        ret_flags = negative_flags;
+    }
+
+    return ret_flags;
 }
 
-/**************************
- *******  A P I ***********
- **************************/
-
-static ConversionState* ctor(Converter& c)
+void ConfigChecksumDrop(const char* args)
 {
-    return new File(c);
+    NetworkPolicy* policy = get_network_policy();
+    policy->checksum_drop = GetChecksumFlags(args);
 }
 
-static const ConvertMap file_api =
+void ConfigChecksumMode(const char* args)
 {
-    "file",
-    ctor,
-};
+    NetworkPolicy* policy = get_network_policy();
+    policy->checksum_eval = GetChecksumFlags(args);
+}
 
-const ConvertMap* file_map = &file_api;
-} // namespace config
+void config_conf(const char* val)
+{
+    lua_conf = val;
+    SetSnortConfDir(lua_conf.c_str());
+    Analyzer::set_main_hook(DetectionEngine::inspect);
+}
+
+void SetSnortConfDir(const char* file)
+{
+    /* extract the config directory from the config filename */
+    if ( file )
+    {
+        const char* path_sep = strrchr(file, '/');
+
+        /* is there a directory separator in the filename */
+        if (path_sep != nullptr)
+        {
+            path_sep++;  /* include path separator */
+            snort_conf_dir.assign(file, path_sep - file);
+        }
+        else
+        {
+            snort_conf_dir = "./";
+        }
+    }
+}
 
